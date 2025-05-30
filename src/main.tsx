@@ -1,9 +1,24 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import App from './App.tsx'
+import { StrictMode, useState } from "react"
+import { createRoot } from "react-dom/client"
+import App from "./App"
+import Login from "./login"
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
+function Root() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+
+  const handleLoginSuccess = () => {
+    setIsAuthenticated(true)
+  }
+
+  return isAuthenticated ? (
     <App />
+  ) : (
+    <Login onLoginSuccess={handleLoginSuccess} />
+  )
+}
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <Root />
   </StrictMode>,
 )

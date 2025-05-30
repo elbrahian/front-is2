@@ -96,6 +96,7 @@
   font-size: 0.875rem;
   color: #6b7280;
   margin: 0;
+  text-transform: capitalize;
 }
 
 .closeButton {
@@ -132,6 +133,11 @@
 }
 
 .spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(59, 130, 246, 0.3);
+  border-radius: 50%;
+  border-top-color: #3b82f6;
   animation: spin 1s linear infinite;
 }
 
@@ -288,93 +294,22 @@
   text-transform: capitalize;
 }
 
-.sessionArrow {
-  color: #9ca3af;
-  transition: transform 0.3s ease;
-}
-
-.sessionItem:hover .sessionArrow {
-  transform: translateX(4px);
-  color: #3b82f6;
-}
-
-.studentsList {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.studentItem {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  background-color: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  transition: all 0.3s ease;
-  animation: slideInUp 0.4s ease-out both;
-}
-
-.studentItem:hover {
-  background-color: #f8fafc;
-  border-color: #cbd5e1;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.studentAvatar {
-  width: 40px;
-  height: 40px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
-}
-
-.studentInfo {
-  flex: 1;
-  min-width: 0;
-}
-
-.studentName {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #111827;
-  margin: 0 0 0.25rem 0;
-}
-
-.studentId {
-  font-size: 0.875rem;
-  color: #6b7280;
-}
-
 /* Scrollbar personalizado */
-.sessionsList::-webkit-scrollbar,
-.studentsList::-webkit-scrollbar {
+.sessionsList::-webkit-scrollbar {
   width: 6px;
 }
 
-.sessionsList::-webkit-scrollbar-track,
-.studentsList::-webkit-scrollbar-track {
+.sessionsList::-webkit-scrollbar-track {
   background: #f1f5f9;
   border-radius: 3px;
 }
 
-.sessionsList::-webkit-scrollbar-thumb,
-.studentsList::-webkit-scrollbar-thumb {
+.sessionsList::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 3px;
 }
 
-.sessionsList::-webkit-scrollbar-thumb:hover,
-.studentsList::-webkit-scrollbar-thumb:hover {
+.sessionsList::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
 
@@ -397,13 +332,11 @@
     padding: 1rem;
   }
 
-  .sessionItem,
-  .studentItem {
+  .sessionItem {
     padding: 0.75rem;
   }
 
-  .sessionIcon,
-  .studentAvatar {
+  .sessionIcon {
     width: 36px;
     height: 36px;
   }

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react"
 import axios from "axios"
-import { X, Calendar, Clock, Users, ChevronRight, RefreshCw, ArrowLeft } from "lucide-react"
+import { X, Calendar, Clock, ArrowLeft } from "lucide-react"
+import TomarAsistencia from "./TomarAsistencia"
 import styles from "./css/sesiones-dialog.module.css"
 
 interface Estudiante {
@@ -26,16 +27,16 @@ interface Props {
 
 export default function SesionesDialog({ grupoId, isOpen, onClose, grupoNombre = "Grupo" }: Props) {
   const [sesiones, setSesiones] = useState<Sesion[]>([])
-  const [estudiantes, setEstudiantes] = useState<Estudiante[] | null>(null)
+  const [estudiantes, setEstudiantes] = useState<Estudiante[]>([])
+  const [sesionSeleccionada, setSesionSeleccionada] = useState<Sesion | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [selectedSesion, setSelectedSesion] = useState<Sesion | null>(null)
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && grupoId) {
       cargarSesiones()
     }
-  }, [isOpen, grupoId])
+  }, [grupoId, isOpen])
 
   const cargarSesiones = async () => {
     setLoading(true)
@@ -45,36 +46,33 @@ export default function SesionesDialog({ grupoId, isOpen, onClose, grupoNombre =
       setSesiones(res.data)
     } catch (err) {
       setError("Error al cargar las sesiones")
-      console.error("Error cargando sesiones:", err)
+      console.error("Error cargando sesiones", err)
     } finally {
       setLoading(false)
     }
+
+    setSesionSeleccionada(null)
+    setEstudiantes([])
   }
 
   const cargarEstudiantes = async (sesion: Sesion) => {
     setLoading(true)
-    setError(null)
-    setSelectedSesion(sesion)
     try {
       const res = await axios.get(`http://localhost:8080/api/v1/asistencias/grupo/${grupoId}`)
       setEstudiantes(res.data)
+      setSesionSeleccionada(sesion)
     } catch (err) {
       setError("Error al cargar los estudiantes")
-      console.error("Error cargando estudiantes:", err)
+      console.error("Error cargando estudiantes", err)
     } finally {
       setLoading(false)
     }
   }
 
   const handleClose = () => {
-    setEstudiantes(null)
-    setSelectedSesion(null)
+    setSesionSeleccionada(null)
+    setEstudiantes([])
     onClose()
-  }
-
-  const volverASesiones = () => {
-    setEstudiantes(null)
-    setSelectedSesion(null)
   }
 
   // Cerrar modal con ESC
@@ -117,15 +115,17 @@ export default function SesionesDialog({ grupoId, isOpen, onClose, grupoNombre =
         <div className={styles.modalHeader}>
           <div className={styles.headerContent}>
             <div className={styles.titleSection}>
-              {estudiantes ? (
-                <button className={styles.backButton} onClick={volverASesiones}>
+              {sesionSeleccionada && (
+                <button className={styles.backButton} onClick={() => setSesionSeleccionada(null)}>
                   <ArrowLeft size={16} />
                   <span>Volver a sesiones</span>
                 </button>
-              ) : null}
-              <h2 className={styles.modalTitle}>{estudiantes ? "Estudiantes de la sesión" : "Sesiones del grupo"}</h2>
+              )}
+              <h2 className={styles.modalTitle}>{sesionSeleccionada ? "Tomar asistencia" : "Sesiones del grupo"}</h2>
               <p className={styles.modalSubtitle}>
-                {estudiantes && selectedSesion ? `Sesión del ${formatFecha(selectedSesion.fecha)}` : `${grupoNombre}`}
+                {sesionSeleccionada
+                  ? `Sesión del ${formatFecha(sesionSeleccionada.fecha)}`
+                  : `${grupoNombre || "Grupo"}`}
               </p>
             </div>
             <button className={styles.closeButton} onClick={handleClose}>
@@ -138,7 +138,7 @@ export default function SesionesDialog({ grupoId, isOpen, onClose, grupoNombre =
         <div className={styles.modalContent}>
           {loading ? (
             <div className={styles.loadingContainer}>
-              <RefreshCw className={styles.spinner} size={32} />
+              <div className={styles.spinner}></div>
               <p>Cargando datos...</p>
             </div>
           ) : error ? (
@@ -148,7 +148,7 @@ export default function SesionesDialog({ grupoId, isOpen, onClose, grupoNombre =
                 Reintentar
               </button>
             </div>
-          ) : !estudiantes ? (
+          ) : !sesionSeleccionada ? (
             // Vista de sesiones
             <>
               <div className={styles.statsSection}>
@@ -182,51 +182,21 @@ export default function SesionesDialog({ grupoId, isOpen, onClose, grupoNombre =
                       <div className={styles.sessionInfo}>
                         <span className={styles.sessionDate}>{formatFecha(sesion.fecha)}</span>
                       </div>
-                      <ChevronRight size={16} className={styles.sessionArrow} />
                     </div>
                   ))}
                 </div>
               )}
             </>
           ) : (
-            // Vista de estudiantes
-            <>
-              <div className={styles.statsSection}>
-                <div className={styles.statItem}>
-                  <Users size={20} color="#3b82f6" />
-                  <div>
-                    <span className={styles.statValue}>{estudiantes.length}</span>
-                    <span className={styles.statLabel}>Estudiantes registrados</span>
-                  </div>
-                </div>
-              </div>
-
-              {estudiantes.length === 0 ? (
-                <div className={styles.emptyState}>
-                  <Users size={48} color="#9ca3af" />
-                  <p className={styles.emptyTitle}>No hay estudiantes disponibles</p>
-                  <p className={styles.emptySubtitle}>Esta sesión no tiene estudiantes registrados</p>
-                </div>
-              ) : (
-                <div className={styles.studentsList}>
-                  {estudiantes.map((estudiante, index) => (
-                    <div
-                      key={estudiante.id}
-                      className={styles.studentItem}
-                      style={{ animationDelay: `${index * 0.05}s` }}
-                    >
-                      <div className={styles.studentAvatar}>
-                        <Users size={16} />
-                      </div>
-                      <div className={styles.studentInfo}>
-                        <h4 className={styles.studentName}>{estudiante.nombresCompletos}</h4>
-                        <span className={styles.studentId}>{estudiante.numeroIdentificacion}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
+            // Vista de tomar asistencia
+            <TomarAsistencia
+              estudiantes={estudiantes}
+              sesionId={sesionSeleccionada.id}
+              grupoId={grupoId}
+              onSuccess={() => {
+                handleClose()
+              }}
+            />
           )}
         </div>
       </div>
