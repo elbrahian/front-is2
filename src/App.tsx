@@ -2,10 +2,18 @@
 
 import { useEffect, useState } from "react"
 import axios from "axios"
-import { RefreshCw, AlertCircle, BookOpen } from "lucide-react"
+import { RefreshCw, AlertCircle, BookOpen, LogOut } from "lucide-react"
+import { useAuth0 } from "@auth0/auth0-react"
 import GrupoCard from "./components/GrupoCard"
 import SesionesDialog from "./components/SesionesDialog"
 import styles from "./components/css/app.module.css"
+
+interface ApiResponse<T> {
+  success: boolean;
+  message: string;
+  data: T;
+  errors?: string[];
+}
 
 interface Grupo {
   id: string
@@ -15,10 +23,19 @@ interface Grupo {
 }
 
 function App() {
+  const { logout, user, getAccessTokenSilently } = useAuth0();
   const [grupos, setGrupos] = useState<Grupo[]>([])
   const [grupoSeleccionado, setGrupoSeleccionado] = useState<Grupo | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  const handleLogout = () => {
+    logout({ 
+      logoutParams: {
+        returnTo: window.location.origin 
+      }
+    });
+  };
 
   const generarColorMateria = (materia: string): string => {
     const colores = ["#3b82f6", "#10b981", "#8b5cf6", "#f97316", "#ef4444", "#14b8a6", "#f59e0b", "#6366f1"]
@@ -34,8 +51,24 @@ function App() {
     setError(null)
 
     try {
-      const res = await axios.get("http://localhost:8080/api/v1/asistencias/grupos")
-      setGrupos(res.data)
+      const token = await getAccessTokenSilently({
+        authorizationParams: {
+          audience: 'https://dev-jewoi3myj56ypvrl.us.auth0.com/api/v2/',
+          scope: 'openid profile email'
+        }
+      });
+
+      const res = await axios.get<ApiResponse<Grupo[]>>("http://localhost:8080/api/v1/grupos", {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (res.data.success) {
+        setGrupos(res.data.data)
+      } else {
+        setError(res.data.message || "Error al cargar los datos")
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al cargar los datos")
       console.error("Error cargando datos:", err)
@@ -46,7 +79,7 @@ function App() {
 
   useEffect(() => {
     cargarDatos()
-  }, [])
+  }, [getAccessTokenSilently])
 
   const currentDate = new Date().toLocaleDateString("es-ES", {
     weekday: "long",
@@ -64,7 +97,16 @@ function App() {
         <div className={styles.header}>
           <div className={styles.headerContent}>
             <div className={styles.titleSection}>
-              <h1 className={styles.title}>Asistencia UCO</h1>
+              <div className={styles.titleRow}>
+                <h1 className={styles.title}>Asistencia UCO</h1>
+                <div className={styles.userInfo}>
+                  {user?.email && <span className={styles.userEmail}>{user.email}</span>}
+                  <button onClick={handleLogout} className={styles.logoutButton}>
+                    <LogOut size={16} />
+                    Cerrar Sesión
+                  </button>
+                </div>
+              </div>
               <p className={styles.subtitle}>{currentDate}</p>
             </div>
             <button className={styles.refreshButton} onClick={cargarDatos} disabled={loading}>
@@ -141,9 +183,9 @@ function App() {
 
         {/* Modal de sesiones */}
         <SesionesDialog
-        grupoId={grupoSeleccionado?.id ?? ""}
-        isOpen={!!grupoSeleccionado}
-        onClose={() => setGrupoSeleccionado(null)}
+          grupoId={grupoSeleccionado?.id ?? ""}
+          isOpen={!!grupoSeleccionado}
+          onClose={() => setGrupoSeleccionado(null)}
         />
       </div>
     </div>

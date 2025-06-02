@@ -1,40 +1,83 @@
-import { GoogleOAuthProvider, GoogleLogin, type CredentialResponse } from '@react-oauth/google';
-import axios from 'axios';
+import { useAuth0 } from '@auth0/auth0-react';
+import styles from './components/css/login.module.css';
+import React, { useEffect } from 'react';
+import { Loader2 } from 'lucide-react';
 
 interface LoginProps {
-    onLoginSuccess: () => void;
+  onLoginSuccess: () => void;
 }
 
 function Login({ onLoginSuccess }: LoginProps) {
-  const handleLoginSuccess = (response: CredentialResponse) => {
-    const token = response.credential;
-    console.log('Token de Google: ', token);
-    onLoginSuccess();
+  const { loginWithRedirect, isAuthenticated, isLoading, error, getAccessTokenSilently, user } = useAuth0();
+
+  // Effect to handle successful authentication
+  useEffect(() => {
+    const handleAuthentication = async () => {
+      if (isAuthenticated && user) {
+        try {
+          const token = await getAccessTokenSilently({
+            authorizationParams: {
+              audience: 'https://dev-jewoi3myj56ypvrl.us.auth0.com/api/v2/',
+              scope: 'openid profile email'
+            }
+          });
+          // Guardar el token en localStorage para uso posterior si es necesario
+          localStorage.setItem('auth_token', token);
+          console.log('Token de Auth0: ', token);
+          onLoginSuccess();
+        } catch (error) {
+          console.error('Error getting token:', error);
+        }
+      }
+    };
+
+    handleAuthentication();
+  }, [isAuthenticated, getAccessTokenSilently, onLoginSuccess, user]);
+
+  const handleLogin = () => {
+    loginWithRedirect({
+      authorizationParams: {
+        audience: 'https://dev-jewoi3myj56ypvrl.us.auth0.com/api/v2/',
+        scope: 'openid profile email'
+      }
+    });
   };
 
-  const handleLoginFailure = () => {
-    console.log('Error de login');
-  };
-  
-
-  return (
-    <GoogleOAuthProvider clientId="201196173586-pof97slsj45l1vcslu98bpj20pphvibc.apps.googleusercontent.com">
-      <div className="login-container">
-        <div className="login-box">
-          <h2>Bienvenido a Asistencia UCO</h2>
-          <p>Inicia sesión con tu cuenta de Google para continuar</p>
-          <GoogleLogin
-            onSuccess={handleLoginSuccess}
-            onError={handleLoginFailure}
-            theme="filled_blue"
-            shape="pill"
-            size="large"
-            text="signin_with"
-            locale="es"
-          />
+  if (isLoading) {
+    return (
+      <div className={styles.loginContainer}>
+        <div className={styles.loginBox}>
+          <Loader2 className={styles.spinner} size={36} />
+          <h2>Cargando...</h2>
         </div>
       </div>
-    </GoogleOAuthProvider>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className={styles.loginContainer}>
+        <div className={styles.loginBox}>
+          <h2>Error de Autenticación</h2>
+          <p className={styles.errorMessage}>{error.message}</p>
+          <button onClick={handleLogin} className={styles.loginButton}>
+            Intentar de nuevo
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.loginContainer}>
+      <div className={styles.loginBox}>
+        <h2>Bienvenido a Asistencia UCO</h2>
+        <p>Inicia sesión para continuar</p>
+        <button onClick={handleLogin} className={styles.loginButton}>
+          Iniciar Sesión
+        </button>
+      </div>
+    </div>
   );
 }
 

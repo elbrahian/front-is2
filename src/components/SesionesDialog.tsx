@@ -3,8 +3,16 @@
 import { useEffect, useState } from "react"
 import axios from "axios"
 import { X, Calendar, Clock, ArrowLeft } from "lucide-react"
+import { useAuth0 } from "@auth0/auth0-react"
 import TomarAsistencia from "./TomarAsistencia"
 import styles from "./css/sesiones-dialog.module.css"
+
+interface ApiResponse<T> {
+  success: boolean;
+  message: string;
+  data: T;
+  errors?: string[];
+}
 
 interface Estudiante {
   id: string
@@ -26,6 +34,7 @@ interface Props {
 }
 
 export default function SesionesDialog({ grupoId, isOpen, onClose, grupoNombre = "Grupo" }: Props) {
+  const { getAccessTokenSilently } = useAuth0();
   const [sesiones, setSesiones] = useState<Sesion[]>([])
   const [estudiantes, setEstudiantes] = useState<Estudiante[]>([])
   const [sesionSeleccionada, setSesionSeleccionada] = useState<Sesion | null>(null)
@@ -38,36 +47,63 @@ export default function SesionesDialog({ grupoId, isOpen, onClose, grupoNombre =
     }
   }, [grupoId, isOpen])
 
-  const cargarSesiones = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await axios.get(`http://localhost:8080/api/v1/asistencias/grupo/${grupoId}/sesiones`)
-      setSesiones(res.data)
-    } catch (err) {
-      setError("Error al cargar las sesiones")
-      console.error("Error cargando sesiones", err)
-    } finally {
-      setLoading(false)
+const cargarSesiones = async () => {
+  setLoading(true)
+  setError(null)
+  try {
+    const token = await getAccessTokenSilently();
+    const res = await axios.get<ApiResponse<Sesion[]>>(
+      `http://localhost:8080/api/v1/grupos/${grupoId}/sesiones`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+    
+    if (res.data.success) {
+      setSesiones(res.data.data)
+    } else {
+      setError(res.data.message || "Error al cargar las sesiones")
     }
-
-    setSesionSeleccionada(null)
-    setEstudiantes([])
+  } catch (err) {
+    setError("Error al cargar las sesiones")
+    console.error("Error cargando sesiones", err)
+  } finally {
+    setLoading(false)
   }
 
-  const cargarEstudiantes = async (sesion: Sesion) => {
-    setLoading(true)
-    try {
-      const res = await axios.get(`http://localhost:8080/api/v1/asistencias/grupo/${grupoId}`)
-      setEstudiantes(res.data)
+  setSesionSeleccionada(null)
+  setEstudiantes([])
+}
+
+const cargarEstudiantes = async (sesion: Sesion) => {
+  setLoading(true)
+  setError(null)
+  try {
+    const token = await getAccessTokenSilently();
+    const res = await axios.get<ApiResponse<Estudiante[]>>(
+      `http://localhost:8080/api/v1/grupos/${grupoId}/estudiantes`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+    
+    if (res.data.success) {
+      setEstudiantes(res.data.data)
       setSesionSeleccionada(sesion)
-    } catch (err) {
-      setError("Error al cargar los estudiantes")
-      console.error("Error cargando estudiantes", err)
-    } finally {
-      setLoading(false)
+    } else {
+      setError(res.data.message || "Error al cargar los estudiantes")
     }
+  } catch (err) {
+    setError("Error al cargar los estudiantes")
+    console.error("Error cargando estudiantes", err)
+  } finally {
+    setLoading(false)
   }
+}
 
   const handleClose = () => {
     setSesionSeleccionada(null)

@@ -2,8 +2,16 @@
 
 import { useState } from "react"
 import axios from "axios"
+import { useAuth0 } from "@auth0/auth0-react"
 import { Check, X, Save, AlertCircle } from "lucide-react"
 import styles from "./css/tomar-asistencia.module.css"
+
+interface ApiResponse<T> {
+  success: boolean;
+  message: string;
+  data: T;
+  errors?: string[];
+}
 
 interface Estudiante {
   id: string
@@ -18,92 +26,92 @@ interface Props {
   onSuccess: () => void
 }
 
-export default function TomarAsistencia({ estudiantes, sesionId, grupoId, onSuccess }: Props) {
-  const [asistencias, setAsistencias] = useState<Record<string, boolean>>({})
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+interface EstudianteAsistencia extends Estudiante {
+  asistio: boolean
+}
 
-  const toggleAsistencia = (id: string) => {
-    setAsistencias((prev) => ({ ...prev, [id]: !prev[id] }))
+export default function TomarAsistencia({ estudiantes, sesionId, grupoId, onSuccess }: Props) {
+  const { getAccessTokenSilently } = useAuth0();
+  const [listaAsistencia, setListaAsistencia] = useState<EstudianteAsistencia[]>(
+    estudiantes.map((est) => ({ ...est, asistio: false }))
+  )
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [mostrarExito, setMostrarExito] = useState(false)
+
+  const marcarAsistencia = (estudiante: EstudianteAsistencia, asistio: boolean) => {
+    setListaAsistencia((lista) =>
+      lista.map((est) => (est.id === estudiante.id ? { ...est, asistio } : est))
+    )
   }
 
-  const enviarAsistencias = async () => {
-    setSaving(true)
+  const guardarAsistencia = async () => {
+    setGuardando(true)
     setError(null)
     try {
-      await Promise.all(
-        estudiantes.map((est) =>
-          axios.post("http://localhost:8080/api/v1/asistencias/registrar", {
-            estudianteId: est.id,
-            grupoId,
-            sesionId,
-            asistio: asistencias[est.id] ?? false,
-          }),
-        ),
+      const token = await getAccessTokenSilently();
+      const asistencias = listaAsistencia.map((estudiante) => ({
+        estudianteId: estudiante.id,
+        sesionId,
+        grupoId,
+        asistio: estudiante.asistio,
+      }))
+
+      await axios.post<ApiResponse<any>>(
+        `http://localhost:8080/api/v1/asistencias`,
+        { asistencias },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
       )
 
-      // Mostrar notificación de éxito
-      const notification = document.createElement("div")
-      notification.className = styles.notification
-      notification.innerHTML = `
-        <div class="${styles.notificationContent}">
-          <div class="${styles.notificationIcon}">✓</div>
-          <div class="${styles.notificationText}">Asistencia registrada con éxito</div>
-        </div>
-      `
-      document.body.appendChild(notification)
-
+      setMostrarExito(true)
       setTimeout(() => {
-        notification.classList.add(styles.hide)
-        setTimeout(() => {
-          document.body.removeChild(notification)
-          onSuccess()
-        }, 300)
+        setMostrarExito(false)
+        onSuccess()
       }, 2000)
-    } catch (error) {
-      console.error("Error registrando asistencia", error)
-      setError("Error al registrar la asistencia. Intente nuevamente.")
+    } catch (err) {
+      setError("Error al guardar la asistencia")
+      console.error("Error guardando asistencia:", err)
     } finally {
-      setSaving(false)
+      setGuardando(false)
     }
   }
 
-  const presentes = Object.values(asistencias).filter(Boolean).length
-  const ausentes = estudiantes.length - presentes
+  const totalEstudiantes = listaAsistencia.length
+  const estudiantesPresentes = listaAsistencia.filter((est) => est.asistio).length
+  const estudiantesAusentes = totalEstudiantes - estudiantesPresentes
 
   return (
     <div className={styles.container}>
       {/* Stats */}
       <div className={styles.statsGrid}>
         <div className={styles.statCard}>
-          <div className={styles.statContent}>
-            <div className={styles.totalIcon}>👥</div>
-            <div>
-              <p className={styles.statValue}>{estudiantes.length}</p>
-              <p className={styles.statLabel}>Total</p>
-            </div>
+          <div className={styles.totalIcon}>👥</div>
+          <div>
+            <p className={styles.statValue}>{totalEstudiantes}</p>
+            <p className={styles.statLabel}>Total Estudiantes</p>
           </div>
         </div>
         <div className={styles.statCard}>
-          <div className={styles.statContent}>
-            <div className={styles.presenteIcon}>
-              <Check size={16} />
-            </div>
-            <div>
-              <p className={styles.statValue}>{presentes}</p>
-              <p className={styles.statLabel}>Presentes</p>
-            </div>
+          <div className={styles.presenteIcon}>
+            <Check size={16} />
+          </div>
+          <div>
+            <p className={styles.statValue}>{estudiantesPresentes}</p>
+            <p className={styles.statLabel}>Presentes</p>
           </div>
         </div>
         <div className={styles.statCard}>
-          <div className={styles.statContent}>
-            <div className={styles.ausenteIcon}>
-              <X size={16} />
-            </div>
-            <div>
-              <p className={styles.statValue}>{ausentes}</p>
-              <p className={styles.statLabel}>Ausentes</p>
-            </div>
+          <div className={styles.ausenteIcon}>
+            <X size={16} />
+          </div>
+          <div>
+            <p className={styles.statValue}>{estudiantesAusentes}</p>
+            <p className={styles.statLabel}>Ausentes</p>
           </div>
         </div>
       </div>
@@ -118,40 +126,65 @@ export default function TomarAsistencia({ estudiantes, sesionId, grupoId, onSucc
 
       {/* Lista de estudiantes */}
       <div className={styles.studentsList}>
-        {estudiantes.map((est, index) => (
-          <div key={est.id} className={styles.studentItem} style={{ animationDelay: `${index * 0.03}s` }}>
+        {listaAsistencia.map((estudiante, index) => (
+          <div
+            key={estudiante.id}
+            className={styles.studentItem}
+            style={{ animationDelay: `${index * 0.05}s` }}
+          >
             <div className={styles.studentInfo}>
-              <h4 className={styles.studentName}>{est.nombresCompletos}</h4>
-              <p className={styles.studentId}>{est.numeroIdentificacion}</p>
+              <span className={styles.studentName}>{estudiante.nombresCompletos}</span>
+              <span className={styles.studentId}>{estudiante.numeroIdentificacion}</span>
             </div>
-            <label className={styles.checkboxContainer}>
-              <input
-                type="checkbox"
-                checked={asistencias[est.id] ?? false}
-                onChange={() => toggleAsistencia(est.id)}
-                className={styles.checkbox}
-              />
-              <span className={styles.checkmark}></span>
-              <span className={styles.checkboxLabel}>{asistencias[est.id] ? "Presente" : "Ausente"}</span>
-            </label>
+            <div className={styles.attendanceButtons}>
+              <button
+                className={`${styles.attendanceButton} ${styles.presentButton} ${
+                  estudiante.asistio ? styles.active : ""
+                }`}
+                onClick={() => marcarAsistencia(estudiante, true)}
+              >
+                <Check size={16} />
+                Presente
+              </button>
+              <button
+                className={`${styles.attendanceButton} ${styles.absentButton} ${
+                  !estudiante.asistio ? styles.active : ""
+                }`}
+                onClick={() => marcarAsistencia(estudiante, false)}
+              >
+                <X size={16} />
+                Ausente
+              </button>
+            </div>
           </div>
         ))}
       </div>
 
       {/* Botón guardar */}
-      <button onClick={enviarAsistencias} disabled={saving} className={styles.saveButton}>
-        {saving ? (
-          <>
-            <div className={styles.buttonSpinner}></div>
-            Guardando...
-          </>
+      <button
+        className={styles.saveButton}
+        onClick={guardarAsistencia}
+        disabled={guardando}
+      >
+        {guardando ? (
+          <div className={styles.buttonSpinner} />
         ) : (
           <>
             <Save size={16} />
-            Guardar asistencia
+            Guardar Asistencia
           </>
         )}
       </button>
+
+      {/* Notificación de éxito */}
+      {mostrarExito && (
+        <div className={`${styles.notification} ${mostrarExito ? "" : styles.hide}`}>
+          <div className={styles.notificationContent}>
+            <div className={styles.notificationIcon}>✓</div>
+            <span className={styles.notificationText}>Asistencia guardada con éxito</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -2,7 +2,15 @@
 
 import React, { useEffect } from "react"
 import { X, Users, User, Hash, Search } from "lucide-react"
+import { useAuth0 } from "@auth0/auth0-react"
 import styles from "./css/estudiantes-dialog.module.css"
+
+interface ApiResponse<T> {
+  success: boolean;
+  message: string;
+  data: T;
+  errors?: string[];
+}
 
 interface Estudiante {
   id: string
@@ -25,6 +33,7 @@ export default function EstudiantesDialog({
   materia = "Materia",
   profesor = "Profesor",
 }: EstudiantesDialogProps) {
+  const { getAccessTokenSilently } = useAuth0();
   const [searchTerm, setSearchTerm] = React.useState("")
 
   // Filtrar estudiantes por búsqueda
