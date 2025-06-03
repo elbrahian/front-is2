@@ -18,6 +18,7 @@ interface ApiResponse<T> {
 interface Grupo {
   id: string
   profesor: string
+  profesorId: string
   materia: string
   cantidadEstudiantes: number
 }
@@ -170,8 +171,10 @@ function App() {
             {grupos.map((grupo, index) => (
               <div key={grupo.id} style={{ animationDelay: `${index * 0.1}s` }} className={styles.groupItem}>
                 <GrupoCard
+                  id={grupo.id}
                   materia={grupo.materia}
                   profesor={grupo.profesor}
+                  profesorId={grupo.profesorId}
                   cantidad={grupo.cantidadEstudiantes}
                   color={generarColorMateria(grupo.materia)}
                   onClick={() => setGrupoSeleccionado(grupo)}
@@ -184,8 +187,10 @@ function App() {
         {/* Modal de sesiones */}
         <SesionesDialog
           grupoId={grupoSeleccionado?.id ?? ""}
+          profesorId={grupoSeleccionado?.profesorId ?? ""}
           isOpen={!!grupoSeleccionado}
           onClose={() => setGrupoSeleccionado(null)}
+          grupoNombre={grupoSeleccionado?.materia}
         />
       </div>
     </div>

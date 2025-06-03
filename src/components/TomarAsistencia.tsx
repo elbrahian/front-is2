@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import axios from "axios"
 import { useAuth0 } from "@auth0/auth0-react"
-import { Check, X, Save, AlertCircle } from "lucide-react"
+import { Check, X, AlertCircle } from "lucide-react"
 import styles from "./css/tomar-asistencia.module.css"
 
 interface ApiResponse<T> {
@@ -14,7 +14,8 @@ interface ApiResponse<T> {
 }
 
 interface Estudiante {
-  id: string
+  id: string               // ID del estudiante
+  estudianteGrupoId: string  // ID de la relación estudiante_grupo
   nombresCompletos: string
   numeroIdentificacion: string
 }
@@ -24,60 +25,112 @@ interface Props {
   sesionId: string
   grupoId: string
   onSuccess: () => void
+  profesorId: string
 }
 
 interface EstudianteAsistencia extends Estudiante {
   asistio: boolean
+  guardado: boolean
 }
 
-export default function TomarAsistencia({ estudiantes, sesionId, grupoId, onSuccess }: Props) {
+export default function TomarAsistencia({ estudiantes, sesionId, grupoId, onSuccess, profesorId }: Props) {
   const { getAccessTokenSilently } = useAuth0();
   const [listaAsistencia, setListaAsistencia] = useState<EstudianteAsistencia[]>(
-    estudiantes.map((est) => ({ ...est, asistio: false }))
+    estudiantes.map((est) => ({ ...est, asistio: false, guardado: false }))
   )
-  const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [mostrarExito, setMostrarExito] = useState(false)
+  const [procesandoEstudiante, setProcesandoEstudiante] = useState<string | null>(null)
 
-  const marcarAsistencia = (estudiante: EstudianteAsistencia, asistio: boolean) => {
-    setListaAsistencia((lista) =>
-      lista.map((est) => (est.id === estudiante.id ? { ...est, asistio } : est))
-    )
-  }
+  // Validar props al montar el componente
+  useEffect(() => {
+    console.log('Props recibidas en TomarAsistencia:', {
+      sesionId,
+      profesorId,
+      grupoId,
+      estudiantes: estudiantes.map(e => ({
+        id: e.id,
+        estudianteGrupoId: e.estudianteGrupoId,
+        nombresCompletos: e.nombresCompletos
+      }))
+    });
 
-  const guardarAsistencia = async () => {
-    setGuardando(true)
+    if (!profesorId) {
+      console.error('profesorId es requerido');
+      setError('Error: No se ha proporcionado el ID del profesor');
+    }
+
+    if (!estudiantes.every(e => e.estudianteGrupoId)) {
+      console.error('Algunos estudiantes no tienen estudianteGrupoId');
+      setError('Error: Datos de estudiantes incompletos');
+    }
+  }, [estudiantes, profesorId, sesionId, grupoId]);
+
+  const marcarAsistencia = async (estudiante: EstudianteAsistencia, asistio: boolean) => {
+    if (!profesorId) {
+      setError('No se puede registrar asistencia: ID del profesor no disponible');
+      return;
+    }
+
+    if (!estudiante.estudianteGrupoId) {
+      setError(`No se puede registrar asistencia para ${estudiante.nombresCompletos}: ID de estudiante-grupo no disponible`);
+      return;
+    }
+
+    setProcesandoEstudiante(estudiante.id)
     setError(null)
+    
     try {
       const token = await getAccessTokenSilently();
-      const asistencias = listaAsistencia.map((estudiante) => ({
-        estudianteId: estudiante.id,
-        sesionId,
-        grupoId,
-        asistio: estudiante.asistio,
-      }))
+      
+      const payload = {
+        sesion: sesionId,
+        profesor: profesorId,
+        estudianteGrupo: estudiante.estudianteGrupoId,
+        asistio: asistio
+      };
 
-      await axios.post<ApiResponse<any>>(
+      console.log('Enviando datos de asistencia:', payload);
+
+      const response = await axios.post<ApiResponse<any>>(
         `http://localhost:8080/api/v1/asistencias`,
-        { asistencias },
+        payload,
         {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
         }
-      )
+      );
 
-      setMostrarExito(true)
-      setTimeout(() => {
-        setMostrarExito(false)
-        onSuccess()
-      }, 2000)
-    } catch (err) {
-      setError("Error al guardar la asistencia")
-      console.error("Error guardando asistencia:", err)
+      console.log('Respuesta del servidor:', response.data);
+
+      if (response.data.success) {
+        setListaAsistencia((lista) =>
+          lista.map((est) =>
+            est.id === estudiante.id
+              ? { ...est, asistio, guardado: true }
+              : est
+          )
+        );
+
+        // Si todos los estudiantes tienen asistencia marcada, llamar a onSuccess
+        const todosGuardados = listaAsistencia.every((est) => est.guardado);
+        if (todosGuardados) {
+          setTimeout(onSuccess, 1000);
+        }
+      } else {
+        throw new Error(response.data.message || 'Error al registrar asistencia');
+      }
+
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.message || 
+                         err.response?.data?.errors?.join(', ') ||
+                         err.message ||
+                         `Error al registrar asistencia para ${estudiante.nombresCompletos}`;
+      setError(errorMessage);
+      console.error("Error guardando asistencia:", err.response?.data || err);
     } finally {
-      setGuardando(false)
+      setProcesandoEstudiante(null)
     }
   }
 
@@ -128,7 +181,7 @@ export default function TomarAsistencia({ estudiantes, sesionId, grupoId, onSucc
       <div className={styles.studentsList}>
         {listaAsistencia.map((estudiante, index) => (
           <div
-            key={estudiante.id}
+            key={`${estudiante.id}-${index}`}
             className={styles.studentItem}
             style={{ animationDelay: `${index * 0.05}s` }}
           >
@@ -142,49 +195,25 @@ export default function TomarAsistencia({ estudiantes, sesionId, grupoId, onSucc
                   estudiante.asistio ? styles.active : ""
                 }`}
                 onClick={() => marcarAsistencia(estudiante, true)}
+                disabled={procesandoEstudiante === estudiante.id || estudiante.guardado}
               >
                 <Check size={16} />
-                Presente
+                {estudiante.guardado ? "Presente ✓" : "Presente"}
               </button>
               <button
                 className={`${styles.attendanceButton} ${styles.absentButton} ${
                   !estudiante.asistio ? styles.active : ""
                 }`}
                 onClick={() => marcarAsistencia(estudiante, false)}
+                disabled={procesandoEstudiante === estudiante.id || estudiante.guardado}
               >
                 <X size={16} />
-                Ausente
+                {estudiante.guardado ? "Ausente ✓" : "Ausente"}
               </button>
             </div>
           </div>
         ))}
       </div>
-
-      {/* Botón guardar */}
-      <button
-        className={styles.saveButton}
-        onClick={guardarAsistencia}
-        disabled={guardando}
-      >
-        {guardando ? (
-          <div className={styles.buttonSpinner} />
-        ) : (
-          <>
-            <Save size={16} />
-            Guardar Asistencia
-          </>
-        )}
-      </button>
-
-      {/* Notificación de éxito */}
-      {mostrarExito && (
-        <div className={`${styles.notification} ${mostrarExito ? "" : styles.hide}`}>
-          <div className={styles.notificationContent}>
-            <div className={styles.notificationIcon}>✓</div>
-            <span className={styles.notificationText}>Asistencia guardada con éxito</span>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

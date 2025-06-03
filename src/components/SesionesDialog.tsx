@@ -14,8 +14,16 @@ interface ApiResponse<T> {
   errors?: string[];
 }
 
+interface EstudianteResponse {
+  id: string
+  estudianteGrupoId: string
+  nombresCompletos: string
+  numeroIdentificacion: string
+}
+
 interface Estudiante {
   id: string
+  estudianteGrupoId: string
   nombresCompletos: string
   numeroIdentificacion: string
 }
@@ -31,9 +39,10 @@ interface Props {
   isOpen: boolean
   onClose: () => void
   grupoNombre?: string
+  profesorId: string
 }
 
-export default function SesionesDialog({ grupoId, isOpen, onClose, grupoNombre = "Grupo" }: Props) {
+export default function SesionesDialog({ grupoId, isOpen, onClose, grupoNombre = "Grupo", profesorId }: Props) {
   const { getAccessTokenSilently } = useAuth0();
   const [sesiones, setSesiones] = useState<Sesion[]>([])
   const [estudiantes, setEstudiantes] = useState<Estudiante[]>([])
@@ -43,9 +52,10 @@ export default function SesionesDialog({ grupoId, isOpen, onClose, grupoNombre =
 
   useEffect(() => {
     if (isOpen && grupoId) {
+      console.log('SesionesDialog - Props recibidas:', { grupoId, profesorId });
       cargarSesiones()
     }
-  }, [grupoId, isOpen])
+  }, [grupoId, isOpen, profesorId])
 
 const cargarSesiones = async () => {
   setLoading(true)
@@ -82,7 +92,8 @@ const cargarEstudiantes = async (sesion: Sesion) => {
   setError(null)
   try {
     const token = await getAccessTokenSilently();
-    const res = await axios.get<ApiResponse<Estudiante[]>>(
+    
+    const res = await axios.get<ApiResponse<EstudianteResponse[]>>(
       `http://localhost:8080/api/v1/grupos/${grupoId}/estudiantes`,
       {
         headers: {
@@ -92,8 +103,16 @@ const cargarEstudiantes = async (sesion: Sesion) => {
     );
     
     if (res.data.success) {
-      setEstudiantes(res.data.data)
-      setSesionSeleccionada(sesion)
+      // Eliminar duplicados basados en el ID del estudiante
+      const estudiantesUnicos = Array.from(
+        new Map(res.data.data.map(est => [est.id, est])).values()
+      );
+
+      setEstudiantes(estudiantesUnicos);
+      setSesionSeleccionada(sesion);
+      
+      console.log('Estudiantes cargados:', estudiantesUnicos);
+      console.log('Usando profesorId:', profesorId);
     } else {
       setError(res.data.message || "Error al cargar los estudiantes")
     }
@@ -229,7 +248,9 @@ const cargarEstudiantes = async (sesion: Sesion) => {
               estudiantes={estudiantes}
               sesionId={sesionSeleccionada.id}
               grupoId={grupoId}
+              profesorId={profesorId}
               onSuccess={() => {
+                console.log('TomarAsistencia onSuccess called');
                 handleClose()
               }}
             />
